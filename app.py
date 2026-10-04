@@ -32,7 +32,7 @@ st.title("📊 البرنامج المحاسبي البسيط")
 st.markdown("---")
 
 # القائمة الجانبية
-menu = ["الرئيسية والملخص", "تسجيل حركة جديدة", "إدارة المخزن", "سجل الحركات"]
+menu = ["الرئيسية والملخص", "تسجيل حركة جديدة", "إدارة المخزن", "سجل وتعديل الحركات"]
 choice = st.sidebar.selectbox("القائمة الرئيسية", menu)
 
 # 1. الصفحة الرئيسية والملخص
@@ -118,11 +118,53 @@ elif choice == "إدارة المخزن":
                 else:
                     st.error("يرجى إدخال اسم المنتج.")
 
-# 4. سجل الحركات كامل مع التنزيل
-elif choice == "سجل الحركات":
-    st.header("📜 جميع الحركات المالية")
+# 4. سجل وتعديل الحركات
+elif choice == "سجل وتعديل الحركات":
+    st.header("📜 جميع الحركات المالية (تعديل / حذف)")
     df_trans = load_data(TRANSACTIONS_FILE)
-    st.dataframe(df_trans, use_container_width=True)
     
-    csv_data = df_trans.to_csv(index=False).encode('utf-8-sig')
-    st.download_button("تنزيل التقرير كملف Excel (CSV)", csv_data, "report.csv", "text/csv")
+    if not df_trans.empty:
+        st.dataframe(df_trans, use_container_width=True)
+        
+        st.markdown("---")
+        st.subheader("✏️ تعديل حركة مسجلة")
+        
+        # اختيار الحركة
+        row_to_edit = st.selectbox("اختر رقم الحركة المراد تعديلها:", df_trans.index)
+        
+        current_row = df_trans.loc[row_to_edit]
+        
+        with st.form("edit_form"):
+            # تحديد نوع الحركة الحالي
+            types_list = ["مبيعات (إيراد)", "مشتريات", "مصروفات"]
+            default_type_idx = types_list.index(current_row["النوع"]) if current_row["النوع"] in types_list else 0
+            
+            new_type = st.selectbox("نوع الحركة", types_list, index=default_type_idx)
+            new_desc = st.text_input("البيان / الوصف", value=str(current_row["البيان / الوصف"]))
+            new_amount = st.number_input("المبلغ (ج.م)", min_value=0.0, value=float(current_row["المبلغ"]), format="%.2f")
+            new_party = st.text_input("اسم العميل / المورد", value=str(current_row["العميل / المورد"]) if pd.notna(current_row["العميل / المورد"]) else "")
+            
+            col_save, col_del = st.columns(2)
+            submit_edit = st.form_submit_button("💾 حفظ التعديلات")
+            
+        if submit_edit:
+            df_trans.loc[row_to_edit, "النوع"] = new_type
+            df_trans.loc[row_to_edit, "البيان / الوصف"] = new_desc
+            df_trans.loc[row_to_edit, "المبلغ"] = new_amount
+            df_trans.loc[row_to_edit, "العميل / المورد"] = new_party
+            save_data(df_trans, TRANSACTIONS_FILE)
+            st.success("تم تعديل الحركة بنجاح!")
+            st.rerun()
+
+        st.markdown("---")
+        if st.button("🗑️️ حذف هذه الحركة بالكامل"):
+            df_trans = df_trans.drop(row_to_edit).reset_index(drop=True)
+            save_data(df_trans, TRANSACTIONS_FILE)
+            st.success("تم حذف الحركة بنجاح!")
+            st.rerun()
+
+        st.markdown("---")
+        csv_data = df_trans.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("تنزيل التقرير كملف Excel (CSV)", csv_data, "report.csv", "text/csv")
+    else:
+        st.info("لا توجد حركات مسجلة حالياً.")
